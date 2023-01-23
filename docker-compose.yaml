@@ -1,0 +1,18 @@
+# example docker compose
+services:
+  app: # any stateful application
+    image: "nginx"
+    labels:
+      - "net.reddec.scheduler.cron=* * * * *"
+      - "net.reddec.scheduler.exec=nginx -s reload"
+  date:
+    image: busybox
+    restart: "no"
+    labels:
+      - "net.reddec.scheduler.cron=* * * * *"
+  scheduler:
+    build:
+      dockerfile: Dockerfile.build
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
