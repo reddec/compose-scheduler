@@ -26,7 +26,7 @@ services:
       - "net.reddec.scheduler.cron=* * * * *"
 
   scheduler:
-    image: ghcr.io/reddec/compose-scheduler:1
+    image: ghcr.io/reddec/compose-scheduler:1.0.0
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
