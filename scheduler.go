@@ -108,7 +108,7 @@ func (sc *Scheduler) runJob(ctx context.Context, running *int32, t Task) {
 		errMessage = err.Error()
 		log.Println("service", t.Service, "failed after", end.Sub(started), "with error:", err)
 	} else {
-		log.Println("service", t.Service, "finished after", end.Sub(started), "without error")
+		log.Println("service", t.Service, "finished after", end.Sub(started), "successfully")
 	}
 	if sc.notification == nil {
 		return
@@ -171,7 +171,7 @@ func (sc *Scheduler) runService(ctx context.Context, task Task) error {
 			return fmt.Errorf("service %s: %s", task.Service, res.Error.Message)
 		}
 		if res.StatusCode != 0 {
-			return fmt.Errorf("sevice %s: status code %d", task.Service, res.StatusCode)
+			return fmt.Errorf("service %s: status code %d", task.Service, res.StatusCode)
 		}
 	case err = <-failed:
 		return fmt.Errorf("wait for service %s: %w", task.Service, err)
