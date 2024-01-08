@@ -220,7 +220,7 @@ func containerID() (string, error) {
 		return "", fmt.Errorf("detect container ID: %w", err)
 	}
 	id := filepath.Base(strings.TrimSpace(string(data)))
-	if id == "/" {
+	if id == "/" || id == ".." {
 		return "", fmt.Errorf("calculate container ID from %s: %w", string(data), err)
 	}
 
