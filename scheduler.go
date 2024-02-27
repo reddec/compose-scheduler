@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"io"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -147,15 +148,19 @@ func (sc *Scheduler) runTask(ctx context.Context, running *int32, task Task) err
 func (sc *Scheduler) execService(ctx context.Context, task Task) error {
 	execID, err := sc.client.ContainerExecCreate(ctx, task.Container, types.ExecConfig{
 		Cmd: task.Command,
+		AttachStderr:true,
+		AttachStdout:true,
 	})
 	if err != nil {
 		return fmt.Errorf("create exec for %s: %w", task.Service, err)
 	}
 
-	err = sc.client.ContainerExecStart(ctx, execID.ID, types.ExecStartCheck{})
+	attach, err := sc.client.ContainerExecAttach(ctx, execID.ID, types.ExecStartCheck{})
 	if err != nil {
-		return fmt.Errorf("exec for %s: %w", task.Service, err)
+	    return fmt.Errorf("exec for %s: %w", task.Service, err)
 	}
+	defer attach.Close()
+	io.Copy(log.Writer(), attach.Reader)
 	return nil
 }
 
