@@ -161,6 +161,14 @@ func (sc *Scheduler) execService(ctx context.Context, task Task) error {
 	}
 	defer attach.Close()
 	io.Copy(log.Writer(), attach.Reader)
+
+	inspect, err := sc.client.ContainerExecInspect(ctx, execID.ID)
+    if err != nil {
+    	return fmt.Errorf("inspect exec for %s: %w", task.Service, err)
+    }
+    if inspect.ExitCode != 0 {
+    	return fmt.Errorf("command returned non-zero code %d", inspect.ExitCode)
+    }
 	return nil
 }
 
