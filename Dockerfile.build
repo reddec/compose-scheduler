@@ -7,8 +7,7 @@ COPY . .
 RUN CGO_ENABLED=0 go build -v -o /usr/local/bin/app ./cmd/...
 
 FROM alpine:3.19 AS certs
-RUN apk add --no-cache ca-certificates && update-ca-certificates
-RUN apk add --no-cache tzdata
+RUN apk add --no-cache tzdata ca-certificates && update-ca-certificates
 
 FROM scratch
 ENTRYPOINT ["/app"]
