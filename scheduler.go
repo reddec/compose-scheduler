@@ -25,6 +25,7 @@ const (
 	composeServiceLabel = "com.docker.compose.service"
 	schedulerLabel      = "net.reddec.scheduler.cron"
 	commandLabel        = "net.reddec.scheduler.exec"
+	logsLabel           = "net.reddec.scheduler.logs"
 )
 
 func Create(ctx context.Context, options ...Option) (*Scheduler, error) {
@@ -58,6 +59,7 @@ type Task struct {
 	Container string
 	Schedule  string
 	Command   []string
+	logging   bool
 }
 
 type Scheduler struct {
@@ -82,7 +84,7 @@ func (sc *Scheduler) Run(ctx context.Context) error {
 	engine := cron.New()
 
 	for _, t := range tasks {
-		log.Println("task for service", t.Service, "at", t.Schedule)
+		log.Println("task for service", t.Service, "at", t.Schedule, "logging:", t.logging)
 		running := new(int32)
 		t := t
 		_, err = engine.AddFunc(t.Schedule, func() {
@@ -160,7 +162,9 @@ func (sc *Scheduler) execService(ctx context.Context, task Task) error {
 	    return fmt.Errorf("exec for %s: %w", task.Service, err)
 	}
 	defer attach.Close()
-	io.Copy(log.Writer(), attach.Reader)
+	if (task.logging) {
+	    io.Copy(log.Writer(), attach.Reader)
+    }
 
 	inspect, err := sc.client.ContainerExecInspect(ctx, execID.ID)
     if err != nil {
@@ -220,6 +224,7 @@ func (sc *Scheduler) listTasks(ctx context.Context) ([]Task, error) {
 			Schedule:  c.Labels[schedulerLabel],
 			Service:   service,
 			Command:   args,
+			logging:   c.Labels[logsLabel] == "true",
 		})
 	}
 

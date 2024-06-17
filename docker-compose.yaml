@@ -5,6 +5,7 @@ services:
     labels:
       - "net.reddec.scheduler.cron=* * * * *"
       - "net.reddec.scheduler.exec=nginx -s reload"
+      - "net.reddec.scheduler.logs=true"
   date:
     image: busybox
     restart: "no"
