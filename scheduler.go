@@ -85,7 +85,7 @@ func (sc *Scheduler) Run(ctx context.Context) error {
 	engine := cron.New()
 
 	for _, t := range tasks {
-		log.Println("task for service", t.Service, "at", t.Schedule, "logging:", t.logging)
+		log.Println("task for service", t.Service, "at", t.Schedule, "| logging:", t.logging)
 		running := new(int32)
 		t := t
 		_, err = engine.AddFunc(t.Schedule, func() {
@@ -149,6 +149,29 @@ func (sc *Scheduler) runTask(ctx context.Context, running *int32, task Task) err
 }
 
 func (sc *Scheduler) execService(ctx context.Context, task Task) error {
+	if (task.logging) {
+	    return sc.execAttachService(ctx, task)
+    } else {
+        return sc.execStartService(ctx, task)
+    }
+}
+
+func (sc *Scheduler) execStartService(ctx context.Context, task Task) error {
+    execID, err := sc.client.ContainerExecCreate(ctx, task.Container, types.ExecConfig{
+        Cmd: task.Command,
+    })
+    if err != nil {
+        return fmt.Errorf("create exec for %s: %w", task.Service, err)
+    }
+
+    err = sc.client.ContainerExecStart(ctx, execID.ID, types.ExecStartCheck{})
+    if err != nil {
+        return fmt.Errorf("exec for %s: %w", task.Service, err)
+    }
+    return nil
+}
+
+func (sc *Scheduler) execAttachService(ctx context.Context, task Task) error {
 	execID, err := sc.client.ContainerExecCreate(ctx, task.Container, types.ExecConfig{
 		Cmd: task.Command,
 		AttachStderr:true,
@@ -163,9 +186,7 @@ func (sc *Scheduler) execService(ctx context.Context, task Task) error {
 	    return fmt.Errorf("exec for %s: %w", task.Service, err)
 	}
 	defer attach.Close()
-	if (task.logging) {
-	    io.Copy(log.Writer(), attach.Reader)
-    }
+    io.Copy(log.Writer(), attach.Reader)
 
 	inspect, err := sc.client.ContainerExecInspect(ctx, execID.ID)
     if err != nil {
