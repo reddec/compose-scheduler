@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"strconv"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -219,12 +220,18 @@ func (sc *Scheduler) listTasks(ctx context.Context) ([]Task, error) {
 			}
 			args = cmd
 		}
+
+    	isLoggingEnabled, err := strconv.ParseBool(c.Labels[logsLabel])
+    	if err != nil {
+            isLoggingEnabled = false
+    	}
+
 		ans = append(ans, Task{
 			Container: c.ID,
 			Schedule:  c.Labels[schedulerLabel],
 			Service:   service,
 			Command:   args,
-			logging:   c.Labels[logsLabel] == "true",
+			logging:   isLoggingEnabled,
 		})
 	}
 
