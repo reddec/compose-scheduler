@@ -3,15 +3,15 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
-	"io"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
-	"strconv"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -149,33 +149,33 @@ func (sc *Scheduler) runTask(ctx context.Context, running *int32, task Task) err
 }
 
 func (sc *Scheduler) execService(ctx context.Context, task Task) error {
-	if (task.logging) {
-	    return sc.execAttachService(ctx, task)
-    } else {
-        return sc.execStartService(ctx, task)
-    }
+	if task.logging {
+		return sc.execAttachService(ctx, task)
+	} else {
+		return sc.execStartService(ctx, task)
+	}
 }
 
 func (sc *Scheduler) execStartService(ctx context.Context, task Task) error {
-    execID, err := sc.client.ContainerExecCreate(ctx, task.Container, types.ExecConfig{
-        Cmd: task.Command,
-    })
-    if err != nil {
-        return fmt.Errorf("create exec for %s: %w", task.Service, err)
-    }
+	execID, err := sc.client.ContainerExecCreate(ctx, task.Container, types.ExecConfig{
+		Cmd: task.Command,
+	})
+	if err != nil {
+		return fmt.Errorf("create exec for %s: %w", task.Service, err)
+	}
 
-    err = sc.client.ContainerExecStart(ctx, execID.ID, types.ExecStartCheck{})
-    if err != nil {
-        return fmt.Errorf("exec for %s: %w", task.Service, err)
-    }
-    return nil
+	err = sc.client.ContainerExecStart(ctx, execID.ID, types.ExecStartCheck{})
+	if err != nil {
+		return fmt.Errorf("exec for %s: %w", task.Service, err)
+	}
+	return nil
 }
 
 func (sc *Scheduler) execAttachService(ctx context.Context, task Task) error {
 	execID, err := sc.client.ContainerExecCreate(ctx, task.Container, types.ExecConfig{
-		Cmd: task.Command,
-		AttachStderr:true,
-		AttachStdout:true,
+		Cmd:          task.Command,
+		AttachStderr: true,
+		AttachStdout: true,
 	})
 	if err != nil {
 		return fmt.Errorf("create exec for %s: %w", task.Service, err)
@@ -183,18 +183,18 @@ func (sc *Scheduler) execAttachService(ctx context.Context, task Task) error {
 
 	attach, err := sc.client.ContainerExecAttach(ctx, execID.ID, types.ExecStartCheck{})
 	if err != nil {
-	    return fmt.Errorf("exec for %s: %w", task.Service, err)
+		return fmt.Errorf("exec for %s: %w", task.Service, err)
 	}
 	defer attach.Close()
-    io.Copy(log.Writer(), attach.Reader)
+	io.Copy(log.Writer(), attach.Reader)
 
 	inspect, err := sc.client.ContainerExecInspect(ctx, execID.ID)
-    if err != nil {
-    	return fmt.Errorf("inspect exec for %s: %w", task.Service, err)
-    }
-    if inspect.ExitCode != 0 {
-    	return fmt.Errorf("command returned non-zero code %d", inspect.ExitCode)
-    }
+	if err != nil {
+		return fmt.Errorf("inspect exec for %s: %w", task.Service, err)
+	}
+	if inspect.ExitCode != 0 {
+		return fmt.Errorf("command returned non-zero code %d", inspect.ExitCode)
+	}
 	return nil
 }
 
@@ -242,10 +242,10 @@ func (sc *Scheduler) listTasks(ctx context.Context) ([]Task, error) {
 			args = cmd
 		}
 
-    	isLoggingEnabled, err := strconv.ParseBool(c.Labels[logsLabel])
-    	if err != nil {
-            isLoggingEnabled = false
-    	}
+		isLoggingEnabled, err := strconv.ParseBool(c.Labels[logsLabel])
+		if err != nil {
+			isLoggingEnabled = false
+		}
 
 		ans = append(ans, Task{
 			Container: c.ID,
