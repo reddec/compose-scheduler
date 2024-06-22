@@ -3,10 +3,12 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -24,6 +26,7 @@ const (
 	composeServiceLabel = "com.docker.compose.service"
 	schedulerLabel      = "net.reddec.scheduler.cron"
 	commandLabel        = "net.reddec.scheduler.exec"
+	logsLabel           = "net.reddec.scheduler.logs"
 )
 
 func Create(ctx context.Context, options ...Option) (*Scheduler, error) {
@@ -57,6 +60,7 @@ type Task struct {
 	Container string
 	Schedule  string
 	Command   []string
+	logging   bool
 }
 
 type Scheduler struct {
@@ -81,7 +85,7 @@ func (sc *Scheduler) Run(ctx context.Context) error {
 	engine := cron.New()
 
 	for _, t := range tasks {
-		log.Println("task for service", t.Service, "at", t.Schedule)
+		log.Println("task for service", t.Service, "at", t.Schedule, "| logging:", t.logging)
 		running := new(int32)
 		t := t
 		_, err = engine.AddFunc(t.Schedule, func() {
@@ -145,6 +149,14 @@ func (sc *Scheduler) runTask(ctx context.Context, running *int32, task Task) err
 }
 
 func (sc *Scheduler) execService(ctx context.Context, task Task) error {
+	if task.logging {
+		return sc.execAttachService(ctx, task)
+	} else {
+		return sc.execStartService(ctx, task)
+	}
+}
+
+func (sc *Scheduler) execStartService(ctx context.Context, task Task) error {
 	execID, err := sc.client.ContainerExecCreate(ctx, task.Container, types.ExecConfig{
 		Cmd: task.Command,
 	})
@@ -155,6 +167,33 @@ func (sc *Scheduler) execService(ctx context.Context, task Task) error {
 	err = sc.client.ContainerExecStart(ctx, execID.ID, types.ExecStartCheck{})
 	if err != nil {
 		return fmt.Errorf("exec for %s: %w", task.Service, err)
+	}
+	return nil
+}
+
+func (sc *Scheduler) execAttachService(ctx context.Context, task Task) error {
+	execID, err := sc.client.ContainerExecCreate(ctx, task.Container, types.ExecConfig{
+		Cmd:          task.Command,
+		AttachStderr: true,
+		AttachStdout: true,
+	})
+	if err != nil {
+		return fmt.Errorf("create exec for %s: %w", task.Service, err)
+	}
+
+	attach, err := sc.client.ContainerExecAttach(ctx, execID.ID, types.ExecStartCheck{})
+	if err != nil {
+		return fmt.Errorf("exec for %s: %w", task.Service, err)
+	}
+	defer attach.Close()
+	io.Copy(log.Writer(), attach.Reader)
+
+	inspect, err := sc.client.ContainerExecInspect(ctx, execID.ID)
+	if err != nil {
+		return fmt.Errorf("inspect exec for %s: %w", task.Service, err)
+	}
+	if inspect.ExitCode != 0 {
+		return fmt.Errorf("command returned non-zero code %d", inspect.ExitCode)
 	}
 	return nil
 }
@@ -202,11 +241,18 @@ func (sc *Scheduler) listTasks(ctx context.Context) ([]Task, error) {
 			}
 			args = cmd
 		}
+
+		isLoggingEnabled, err := strconv.ParseBool(c.Labels[logsLabel])
+		if err != nil {
+			isLoggingEnabled = false
+		}
+
 		ans = append(ans, Task{
 			Container: c.ID,
 			Schedule:  c.Labels[schedulerLabel],
 			Service:   service,
 			Command:   args,
+			logging:   isLoggingEnabled,
 		})
 	}
 
